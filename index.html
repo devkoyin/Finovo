@@ -985,6 +985,8 @@ const S = {
   del: (k)   => { try { localStorage.removeItem('finovo_'+k); } catch(e){} }
 };
 
+const SESSION_MS = 8 * 60 * 60 * 1000; // 8 hours
+
 /* ══════════ BOOT ══════════ */
 window.addEventListener('load', () => {
   // Load persisted state
@@ -998,10 +1000,18 @@ window.addEventListener('load', () => {
   // Populate onboarding budget grid
   buildObBudgetGrid();
 
+  // Check session expiry
   if (user) {
-    // Returning user — skip onboarding
-    document.getElementById('onboard-wrap').classList.add('gone');
-    launchApp();
+    const age = Date.now() - (user.loginTime || 0);
+    if (age > SESSION_MS) {
+      // Session expired — clear and show login
+      S.del('user');
+      user = null;
+      obSwitchTab('login');
+    } else {
+      document.getElementById('onboard-wrap').classList.add('gone');
+      launchApp();
+    }
   }
   // else onboarding is shown by default
 });
@@ -1043,9 +1053,9 @@ function obStep1() {
     // Simulate login — just use what's saved or create minimal user
     const saved = S.get('user', null);
     if (saved) {
-      user = saved;
+      user = { ...saved, loginTime: Date.now() };
     } else {
-      user = { name: email.split('@')[0], email, goal: 'track', initials: mkIni(email.split('@')[0]) };
+      user = { name: email.split('@')[0], email, goal: 'track', initials: mkIni(email.split('@')[0]), loginTime: Date.now() };
     }
     S.set('user', user);
     document.getElementById('onboard-wrap').classList.add('gone');
@@ -1096,7 +1106,8 @@ function obStep3() {
     email,
     goal: obGoal,
     initials: mkIni(name || email.split('@')[0]),
-    joinedDate: new Date().toISOString()
+    joinedDate: new Date().toISOString(),
+    loginTime: Date.now()
   };
   S.set('user', user);
   document.getElementById('ob-done-name').textContent = user.name.split(' ')[0];
@@ -1607,9 +1618,9 @@ function logout() {
   user = null;
   document.getElementById('app').classList.remove('ready');
   document.getElementById('onboard-wrap').classList.remove('gone');
-  // Reset onboarding inputs
+  closeMobileMenu();
   ['ob-name','ob-email','ob-pass'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  obSwitchTab('signup');
+  obSwitchTab('login');
   obGoToStep(1);
   toast('👋 Signed out of Finovo');
 }
